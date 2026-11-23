@@ -2026,3 +2026,5 @@ button {
 .event-block-head .title-case { margin-left: 0; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; line-height: 1.5; }
 .event-block-head .overlap-tag { flex-shrink: 0; }
 .event-title { flex-shrink: 1; min-width: 0; }
+
+.app-version{font-size:0.72rem;color:#8a8a8a;margin-left:0.35rem;font-family:Consolas,monospace;white-space:nowrap}
