@@ -1,4 +1,4 @@
-const CACHE = "notion-planner-shell-v2";
+const CACHE = "notion-planner-shell-v3";
 const SHELL = [
   "./",
   "./index.html",

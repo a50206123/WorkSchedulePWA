@@ -1986,3 +1986,15 @@ button {
     font-size: 10px;
   }
 }
+
+/* 任務名後的案件名稱：小一號灰字 */
+.title-case {
+  font-size: 0.85em;
+  font-weight: 400;
+  color: #8a8a8a;
+  margin-left: 0.4em;
+}
+.event-block-head { justify-content: flex-start; }
+.event-block-head .title-case { margin-left: 0; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; line-height: 1.5; }
+.event-block-head .overlap-tag { flex-shrink: 0; }
+.event-title { flex-shrink: 1; min-width: 0; }

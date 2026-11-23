@@ -165,6 +165,10 @@ function cleanUrl(url) {
   return String(url || "").trim().replace(/\/+$/, "");
 }
 
+function caseSuffix(task) {
+  return task && task.caseTitle ? `<span class="title-case">${escapeHtml(task.caseTitle)}</span>` : "";
+}
+
 function escapeHtml(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -510,7 +514,7 @@ function buildOverlapBannerHtml(overlapClusters, showDayLabel) {
           return `
             <button type="button" class="overlap-chip" data-open-task="${escapeHtml(seg.task.id)}">
               <span class="status-dot" style="--status-color:${color}"></span>
-              <span>${escapeHtml(seg.task.title || "未命名任務")}</span>
+              <span>${escapeHtml(seg.task.title || "未命名任務")}</span>${caseSuffix(seg.task)}
               <span class="tabular" style="color:var(--text-muted)">${escapeHtml(timeLabel)}</span>
             </button>
           `;
@@ -578,8 +582,8 @@ function buildTimedBlocksHtml(items, dayYmd) {
         : "";
 
       const metaHtml =
-        seg.task.caseTitle && !isCompact
-          ? `<div class="event-meta"><span class="event-case">${escapeHtml(seg.task.caseTitle)}</span></div>`
+        false
+          ? ""
           : "";
 
       return `
@@ -593,7 +597,7 @@ function buildTimedBlocksHtml(items, dayYmd) {
           title="${escapeHtml(`${seg.task.title} (${timeLabel})`)}"
         >
           <div class="event-block-head">
-            <span class="event-title">${escapeHtml(seg.task.title || "未命名任務")}</span>
+            <span class="event-title">${escapeHtml(seg.task.title || "未命名任務")}</span>${caseSuffix(seg.task)}
             ${seg.isOverlapping ? `<span class="overlap-tag">重疊</span>` : ""}
           </div>
           <div class="event-time tabular">${seg.continuesBefore ? "← " : ""}${escapeHtml(timeLabel)}${seg.continuesAfter ? " →" : ""}</div>
@@ -623,11 +627,11 @@ function buildDayViewHtml(datedTasks, dayYmd) {
     ? allDayTasks
         .map((t) => {
           const color = getStatusColor(t.status, t.statusColor);
-          const caseText = t.caseTitle ? `<span class="allday-chip-case">${escapeHtml(t.caseTitle)}</span>` : "";
+          const caseText = "";
           return `
             <button type="button" class="allday-chip" data-open-task="${escapeHtml(t.id)}" style="--status-color:${color}">
               <span class="status-dot" style="--status-color:${color}"></span>
-              <span class="allday-chip-title">${escapeHtml(t.title || "未命名任務")}</span>
+              <span class="allday-chip-title">${escapeHtml(t.title || "未命名任務")}</span>${caseSuffix(t)}
               ${caseText}
             </button>
           `;
@@ -728,7 +732,7 @@ function buildWeekViewHtml(datedTasks, weekYmds) {
           title="${escapeHtml(bar.task.title)}"
         >
           <span class="status-dot" style="--status-color:${color}"></span>
-          <span class="allday-bar-title">${escapeHtml(bar.task.title || "未命名任務")}</span>
+          <span class="allday-bar-title">${escapeHtml(bar.task.title || "未命名任務")}</span>${caseSuffix(bar.task)}
         </div>
       `;
     })
@@ -850,7 +854,7 @@ function buildMonthViewHtml(datedTasks, focusDate) {
               title="${escapeHtml(bar.task.title)}"
             >
               <span class="status-dot" style="--status-color:${color}"></span>
-              <span class="allday-bar-title">${escapeHtml(bar.task.title || "未命名任務")}</span>
+              <span class="allday-bar-title">${escapeHtml(bar.task.title || "未命名任務")}</span>${caseSuffix(bar.task)}
             </div>
           `;
         })
@@ -883,7 +887,7 @@ function buildMonthViewHtml(datedTasks, focusDate) {
                 >
                   <span class="status-dot" style="--status-color:${color}"></span>
                   <span class="month-timed-time tabular">${hm}</span>
-                  <span class="month-timed-title">${escapeHtml(seg.task.title || "未命名任務")}</span>
+                  <span class="month-timed-title">${escapeHtml(seg.task.title || "未命名任務")}</span>${caseSuffix(seg.task)}
                 </button>
               `;
             })
@@ -1044,11 +1048,11 @@ function renderListView() {
                       <button type="button" class="task-row ${isDone ? "is-done" : ""}" data-open-task="${escapeHtml(t.id)}">
                         <div class="task-row-main">
                           <span class="status-dot" style="--status-color:${color}" title="${escapeHtml(t.status || "")}"></span>
-                          <span class="task-row-title">${escapeHtml(t.title || "未命名任務")}</span>
+                          <span class="task-row-title">${escapeHtml(t.title || "未命名任務")}</span>${caseSuffix(t)}
                         </div>
                         <div class="task-row-meta">
                           <span class="date-pill tabular ${isEmptyDate ? "is-empty" : ""}">${escapeHtml(dateText)}</span>
-                          ${t.caseTitle ? `<span class="case-pill">${escapeHtml(t.caseTitle)}</span>` : ""}
+                          
                         </div>
                       </button>
                     `;
@@ -1523,7 +1527,7 @@ function openDaySheet(ymd) {
     const color = getStatusColor(t.status, t.statusColor);
     parts.push(`
       <button type="button" class="day-sheet-item" data-sheet-task="${escapeHtml(t.id)}" style="--status-color:${color}">
-        <span style="font-weight:600">${escapeHtml(t.title || "未命名任務")}</span>
+        <span style="font-weight:600">${escapeHtml(t.title || "未命名任務")}</span>${caseSuffix(t)}
         <span class="date-pill tabular">整天</span>
       </button>
     `);
@@ -1534,7 +1538,7 @@ function openDaySheet(ymd) {
     parts.push(`
       <button type="button" class="day-sheet-item ${seg.isOverlapping ? "is-overlap" : ""}" data-sheet-task="${escapeHtml(seg.task.id)}" style="--status-color:${color}">
         <span style="display:flex;align-items:center;gap:6px;min-width:0">
-          <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(seg.task.title || "未命名任務")}</span>
+          <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(seg.task.title || "未命名任務")}</span>${caseSuffix(seg.task)}
           ${seg.isOverlapping ? `<span class="overlap-tag">重疊</span>` : ""}
         </span>
         <span class="date-pill tabular">${escapeHtml(label)}</span>
