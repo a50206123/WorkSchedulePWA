@@ -1,0 +1,9 @@
+{
+  "name": "notion-planner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test worker/worker.test.js web/dates.test.js",
+    "start": "npx --yes serve web -l 4173"
+  }
+}

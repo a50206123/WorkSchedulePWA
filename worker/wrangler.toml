@@ -1,0 +1,13 @@
+name = "notion-planner-api"
+main = "worker.js"
+compatibility_date = "2026-11-23"
+
+# 以下為公開識別碼，不是金鑰。金鑰請用 wrangler secret put 設定：
+#   wrangler secret put NOTION_TOKEN
+#   wrangler secret put APP_KEY
+[vars]
+DATABASE_ID = "33d5ab5563a680218a90dd786aa20ab3"
+DATA_SOURCE_ID = "33d5ab5563a68031973f000bfe8abd0a"
+CASE_LIST_DATABASE_ID = "33b5ab5563a680b0a2abd7802fc107ca"
+# 部署後請改成你的 GitHub Pages 網址，可用逗號加本機測試來源
+ALLOWED_ORIGIN = "http://localhost:4173"
