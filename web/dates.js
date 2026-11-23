@@ -535,3 +535,84 @@ export function formatTaskDateSummary(dateObj) {
   }
   return `${formatShortMd(s.ymd)} ${s.hm} – ${formatShortMd(e.ymd)} ${e.hm}`;
 }
+
+/** 在指定日與開始分鐘建立有時間區間（預設 1 小時，15 分鐘對齊；跨午夜則結束日加一天） */
+export function toTimedDate(ymd, startMinutes, durationMin = DEFAULT_TIMED_DURATION_MIN) {
+  const duration = Math.max(MIN_TIMED_DURATION_MIN, durationMin);
+  const startMin = Math.max(0, Math.min(1440 - MIN_TIMED_DURATION_MIN, snapMinutes(startMinutes)));
+  let endMin = startMin + duration;
+  let endYmd = ymd;
+  if (endMin >= 1440) {
+    endYmd = addDaysYmd(ymd, 1);
+    endMin -= 1440;
+  }
+  return {
+    start: formatTaipeiIso(ymd, minutesToHm(startMin)),
+    end: formatTaipeiIso(endYmd, minutesToHm(endMin)),
+    hasTime: true,
+  };
+}
+
+/** 將任務改為指定日的整天行程（單日，end 為 null） */
+export function toAllDayDate(ymd) {
+  return { start: ymd, end: null, hasTime: false };
+}
+
+/**
+ * 表單結束日期／時間不得早於開始。
+ * 若已填的結束較早，自動調成等於開始；未填結束則不補值。
+ */
+export function clampEndDateTime({ startDate, startTime, endDate, endTime, allDay } = {}) {
+  const result = {
+    endDate: endDate || "",
+    endTime: endTime || "",
+    endDateMin: startDate || "",
+    endTimeMin: "",
+    adjusted: false,
+  };
+  if (!startDate) return result;
+  if (result.endDate && result.endDate < startDate) {
+    result.endDate = startDate;
+    result.adjusted = true;
+  }
+  if (!allDay && startTime) {
+    const sameDay = !result.endDate || result.endDate === startDate;
+    if (sameDay) {
+      result.endTimeMin = startTime;
+      if (result.endTime && result.endTime < startTime) {
+        result.endTime = startTime;
+        result.adjusted = true;
+      }
+    }
+  }
+  return result;
+}
+
+/** 驗證結束不早於開始；通過回傳 null，否則回傳正體中文錯誤訊息 */
+export function validateEndNotBeforeStart({ startDate, startTime, endDate, endTime, allDay } = {}) {
+  if (!startDate) return null;
+  if (endDate && endDate < startDate) {
+    return "結束日期不可早於開始日期。";
+  }
+  if (allDay) return null;
+  if (!startTime) return null;
+  if (!endTime && !endDate) return null;
+  const effEndDate = endDate || startDate;
+  const effEndTime = endTime || startTime;
+  if (effEndDate < startDate) return "結束日期不可早於開始日期。";
+  if (effEndDate === startDate && endTime && endTime < startTime) {
+    return "結束時間不可早於開始時間。";
+  }
+  if (effEndDate === startDate && effEndTime === startTime && endTime) {
+    return "結束時間必須晚於開始時間。";
+  }
+  if (effEndDate === startDate && endTime && endTime < startTime) {
+    return "結束時間不可早於開始時間。";
+  }
+  const startIso = formatTaipeiIso(startDate, startTime);
+  const endIso = formatTaipeiIso(effEndDate, effEndTime);
+  if ((endTime || (endDate && endDate !== startDate)) && new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+    return "結束時間必須晚於開始時間。";
+  }
+  return null;
+}

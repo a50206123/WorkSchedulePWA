@@ -3,6 +3,7 @@ import {
   WEEKDAY_MON_FIRST,
   SNAP_MINUTES,
   MIN_TIMED_DURATION_MIN,
+  DEFAULT_TIMED_DURATION_MIN,
   getTaipeiTodayYmd,
   getTaipeiNowMinutes,
   addDaysYmd,
@@ -20,6 +21,10 @@ import {
   shiftTimedTaskDate,
   resizeTimedTaskDate,
   shiftAllDayTaskDate,
+  toTimedDate,
+  toAllDayDate,
+  clampEndDateTime,
+  validateEndNotBeforeStart,
   formatDayHeading,
   formatWeekHeading,
   formatMonthHeading,
@@ -484,7 +489,7 @@ function renderTimelineView() {
 }
 
 function autoScrollTimeline(datedTasks) {
-  const scroller = $main.querySelector(".time-scroll");
+  const scroller = $main.querySelector(".calendar-vscroll") || $main.querySelector(".time-scroll");
   if (!scroller) return;
   const targetDays = state.range === "day" ? [state.focusDate] : getWeekYmds(state.focusDate);
   let earliestMin = 7 * 60; // 預設 07:00
@@ -497,7 +502,11 @@ function autoScrollTimeline(datedTasks) {
     }
   }
   const targetPx = Math.max(0, (earliestMin / 60) * HOUR_HEIGHT - 18);
-  scroller.scrollTop = targetPx;
+  const sticky = scroller.querySelector(".week-sticky-head, .allday-strip");
+  const grid = scroller.querySelector("[data-drag-grid]");
+  const stickyH = sticky ? sticky.offsetHeight : 0;
+  const gridTop = grid ? grid.offsetTop : stickyH;
+  scroller.scrollTop = Math.max(0, gridTop + targetPx - stickyH);
 }
 
 function buildOverlapBannerHtml(overlapClusters, showDayLabel) {
@@ -629,7 +638,7 @@ function buildDayViewHtml(datedTasks, dayYmd) {
           const color = getStatusColor(t.status, t.statusColor);
           const caseText = "";
           return `
-            <button type="button" class="allday-chip" data-open-task="${escapeHtml(t.id)}" style="--status-color:${color}">
+            <button type="button" class="allday-chip" data-allday-drag="${escapeHtml(t.id)}" data-open-task="${escapeHtml(t.id)}" style="--status-color:${color}">
               <span class="status-dot" style="--status-color:${color}"></span>
               <span class="allday-chip-title">${escapeHtml(t.title || "未命名任務")}</span>${caseSuffix(t)}
               ${caseText}
@@ -647,6 +656,7 @@ function buildDayViewHtml(datedTasks, dayYmd) {
     ${overlapBanner}
     ${allDayNotice}
     <div class="calendar-card day-view">
+      <div class="calendar-vscroll time-scroll">
       <div class="allday-strip">
         <div class="allday-strip-label">整天</div>
         <div class="allday-strip-items" data-allday-slot="${dayYmd}">
@@ -654,7 +664,6 @@ function buildDayViewHtml(datedTasks, dayYmd) {
         </div>
       </div>
 
-      <div class="time-scroll">
         <div class="day-grid" data-drag-grid="day">
           ${buildHourGutterHtml()}
           <div class="day-column ${isToday ? "is-today" : ""}" data-day-col="${dayYmd}">
@@ -762,6 +771,8 @@ function buildWeekViewHtml(datedTasks, weekYmds) {
     <div class="calendar-card week-view">
       <div class="week-scroll-x">
         <div class="week-frame">
+          <div class="calendar-vscroll time-scroll">
+          <div class="week-sticky-head">
           <div class="week-header">
             <div class="week-corner">時間</div>
             ${headerCells}
@@ -776,8 +787,8 @@ function buildWeekViewHtml(datedTasks, weekYmds) {
               </div>
             </div>
           </div>
+          </div>
 
-          <div class="time-scroll">
             <div class="week-time-grid" data-drag-grid="week" data-week-start="${weekYmds[0]}">
               ${buildHourGutterHtml()}
               ${dayColumnsHtml}
@@ -1292,6 +1303,22 @@ function syncAllDayVisibility() {
   $wrapEndTime.hidden = isAllDay;
 }
 
+function applyEndConstraints() {
+  const next = clampEndDateTime({
+    startDate: $fStartDate.value.trim(),
+    startTime: $fStartTime.value.trim(),
+    endDate: $fEndDate.value.trim(),
+    endTime: $fEndTime.value.trim(),
+    allDay: $fAllDay.checked,
+  });
+  if (next.endDateMin) $fEndDate.min = next.endDateMin;
+  else $fEndDate.removeAttribute("min");
+  if (next.endTimeMin && !$fAllDay.checked) $fEndTime.min = next.endTimeMin;
+  else $fEndTime.removeAttribute("min");
+  if ($fEndDate.value !== next.endDate) $fEndDate.value = next.endDate;
+  if ($fEndTime.value !== next.endTime) $fEndTime.value = next.endTime;
+}
+
 function openCreateModal(prefill = {}) {
   state.modal = {
     open: true,
@@ -1318,6 +1345,7 @@ function openCreateModal(prefill = {}) {
   $fEndDate.value = prefill.endDate || "";
   $fEndTime.value = prefill.endTime || "";
   syncAllDayVisibility();
+  applyEndConstraints();
 
   $taskModal.hidden = false;
   setTimeout(() => $fTitle.focus(), 20);
@@ -1374,6 +1402,7 @@ function openEditModal(taskId) {
     $fEndTime.value = e ? e.hm : "";
   }
   syncAllDayVisibility();
+  applyEndConstraints();
 
   $taskModal.hidden = false;
   setTimeout(() => $fTitle.focus(), 20);
@@ -1402,6 +1431,15 @@ function buildDateFromForm() {
     }
     return null;
   }
+
+  const orderError = validateEndNotBeforeStart({
+    startDate,
+    startTime: $fStartTime.value.trim(),
+    endDate,
+    endTime: $fEndTime.value.trim(),
+    allDay,
+  });
+  if (orderError) throw new Error(orderError);
 
   if (allDay) {
     if (endDate && endDate < startDate) {
@@ -1570,6 +1608,75 @@ function hideDragTooltip() {
   $dragTooltip.hidden = true;
 }
 
+function clearDropTargets() {
+  for (const el of $main.querySelectorAll(".is-drop-target")) {
+    el.classList.remove("is-drop-target");
+  }
+}
+
+function hitAllDayZone(x, y) {
+  const skip = (el) =>
+    el.closest?.("#drag-tooltip, .is-dragging, .event-block, [data-allday-drag]");
+  for (const el of document.elementsFromPoint(x, y)) {
+    if (skip(el)) continue;
+    const slot = el.closest("[data-allday-slot]");
+    if (slot?.dataset.alldaySlot) {
+      return { ymd: slot.dataset.alldaySlot, el: slot.closest(".allday-strip, .week-allday-row") || slot };
+    }
+    const area = el.closest("[data-week-allday-area]");
+    if (area) {
+      const rect = area.getBoundingClientRect();
+      const idx = Math.min(6, Math.max(0, Math.floor(((x - rect.left) / rect.width) * 7)));
+      const weekStart = document.querySelector("[data-week-start]")?.dataset.weekStart;
+      const ymd = weekStart ? addDaysYmd(weekStart, idx) : state.focusDate;
+      return { ymd, el: area.closest(".week-allday-row") || area };
+    }
+    const strip = el.closest(".allday-strip, .week-allday-row, .week-sticky-head");
+    if (strip) {
+      const daySlot = strip.querySelector("[data-allday-slot]");
+      return { ymd: daySlot?.dataset.alldaySlot || state.focusDate, el: strip };
+    }
+  }
+  return null;
+}
+
+function hitTimeGrid(x, y) {
+  const grid = document.querySelector("[data-drag-grid]");
+  if (!grid) return null;
+  const scroll = grid.closest(".calendar-vscroll") || grid.closest(".time-scroll") || grid;
+  const vis = scroll.getBoundingClientRect();
+  if (x < vis.left || x > vis.right || y < vis.top || y > vis.bottom) return null;
+
+  const gridRect = grid.getBoundingClientRect();
+  if (y < gridRect.top || y > gridRect.bottom) return null;
+
+  const rawMin = ((y - gridRect.top) / HOUR_HEIGHT) * 60;
+  const minutes = Math.max(
+    0,
+    Math.min(1440 - DEFAULT_TIMED_DURATION_MIN, snapMinutes(rawMin, SNAP_MINUTES))
+  );
+
+  let ymd = null;
+  if (grid.dataset.dragGrid === "day") {
+    ymd = grid.querySelector("[data-day-col]")?.dataset.dayCol || state.focusDate;
+  } else {
+    const cols = [...grid.querySelectorAll("[data-day-col]")];
+    const hitCol = cols.find((c) => {
+      const r = c.getBoundingClientRect();
+      return x >= r.left && x < r.right;
+    });
+    ymd = hitCol?.dataset.dayCol || null;
+    if (!ymd && cols.length) {
+      const first = cols[0].getBoundingClientRect();
+      const last = cols[cols.length - 1].getBoundingClientRect();
+      if (x < first.left) ymd = cols[0].dataset.dayCol;
+      else if (x >= last.right) ymd = cols[cols.length - 1].dataset.dayCol;
+    }
+  }
+  if (!ymd) return null;
+  return { ymd, minutes, el: grid };
+}
+
 function startPointerInteraction(e) {
   if (e.button !== 0 && e.pointerType === "mouse") return;
 
@@ -1605,7 +1712,7 @@ function startPointerInteraction(e) {
     return;
   }
 
-  // 2. 拖曳時間區塊
+  // 2. 拖曳時間區塊（可上下改時間，也可拖到整天列改為整天）
   const blockEl = e.target.closest("[data-event-task]");
   if (blockEl) {
     const taskId = blockEl.dataset.eventTask;
@@ -1633,25 +1740,32 @@ function startPointerInteraction(e) {
       origEndMin: Number(blockEl.dataset.endMin),
       deltaDays: 0,
       deltaMin: 0,
+      convertTo: null,
+      dropYmd: null,
       moved: false,
     };
+    blockEl.setPointerCapture?.(e.pointerId);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerCancel);
     return;
   }
 
-  // 3. 週視圖整天橫條按日移動
+  // 3. 整天列（日視圖標籤或週視圖橫條）：可按日移動，也可拖到時間格改為 1 小時時段
   const allDayBar = e.target.closest("[data-allday-drag]");
   if (allDayBar) {
     const taskId = allDayBar.dataset.alldayDrag;
     const task = state.tasks.find((t) => t.id === taskId);
-    const area = allDayBar.closest("[data-week-allday-area]");
-    if (!task || !area) return;
+    if (!task) return;
 
-    const colWidth = area.getBoundingClientRect().width / 7;
+    const weekArea = allDayBar.closest("[data-week-allday-area]");
+    const daySlot = allDayBar.closest("[data-allday-slot]");
+    const mode = weekArea ? "week" : "day";
+    const colWidth = weekArea ? weekArea.getBoundingClientRect().width / 7 : 0;
+
     activeDrag = {
       kind: "move-allday",
+      mode,
       pointerId: e.pointerId,
       taskId,
       task,
@@ -1659,9 +1773,14 @@ function startPointerInteraction(e) {
       colWidth,
       startX: e.clientX,
       startY: e.clientY,
+      originYmd: daySlot?.dataset.alldaySlot || state.focusDate,
       deltaDays: 0,
+      convertTo: null,
+      dropYmd: null,
+      dropStartMin: 0,
       moved: false,
     };
+    allDayBar.setPointerCapture?.(e.pointerId);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerCancel);
@@ -1706,6 +1825,18 @@ function onPointerMove(e) {
   }
 
   if (activeDrag.kind === "move-timed") {
+    clearDropTargets();
+    const allDayHit = hitAllDayZone(e.clientX, e.clientY);
+    if (allDayHit) {
+      activeDrag.convertTo = "allday";
+      activeDrag.dropYmd = allDayHit.ymd;
+      allDayHit.el?.classList.add("is-drop-target");
+      activeDrag.block.style.transform = `translate(${dx}px, ${dy}px)`;
+      showDragTooltip(e.clientX, e.clientY, `改為整天行程（${formatShortMd(allDayHit.ymd)}）`);
+      return;
+    }
+
+    activeDrag.convertTo = null;
     const rawDeltaMin = (dy / HOUR_HEIGHT) * 60;
     const snappedDeltaMin = snapMinutes(rawDeltaMin, SNAP_MINUTES);
     const deltaDays =
@@ -1731,6 +1862,25 @@ function onPointerMove(e) {
   }
 
   if (activeDrag.kind === "move-allday") {
+    clearDropTargets();
+    const timeHit = hitTimeGrid(e.clientX, e.clientY);
+    if (timeHit) {
+      activeDrag.convertTo = "timed";
+      activeDrag.dropYmd = timeHit.ymd;
+      activeDrag.dropStartMin = timeHit.minutes;
+      timeHit.el?.classList.add("is-drop-target");
+      activeDrag.bar.style.transform = `translate(${dx}px, ${dy}px)`;
+      const preview = toTimedDate(timeHit.ymd, timeHit.minutes, DEFAULT_TIMED_DURATION_MIN);
+      const s = parseTaipeiDateTime(preview.start);
+      const en = preview.end ? parseTaipeiDateTime(preview.end) : null;
+      const label = s
+        ? `改為時段 ${formatShortMd(s.ymd)} ${s.hm}${en ? `–${en.hm}` : ""}`
+        : "改為時段";
+      showDragTooltip(e.clientX, e.clientY, label);
+      return;
+    }
+
+    activeDrag.convertTo = null;
     const deltaDays = activeDrag.colWidth > 0 ? Math.round(dx / activeDrag.colWidth) : 0;
     activeDrag.deltaDays = deltaDays;
     activeDrag.bar.style.transform = `translateX(${deltaDays * activeDrag.colWidth}px)`;
@@ -1747,10 +1897,12 @@ async function onPointerUp() {
   const drag = activeDrag;
   cleanupDragListeners();
   hideDragTooltip();
+  clearDropTargets();
 
   if (!drag.moved) {
     // 非拖曳：視為點擊
     if (drag.kind === "move-timed" || drag.kind === "move-allday") {
+      suppressClickUntil = Date.now() + 250;
       openEditModal(drag.taskId);
     }
     return;
@@ -1765,6 +1917,10 @@ async function onPointerUp() {
       return;
     }
     nextDate = resizeTimedTaskDate(drag.task.date, drag.dayYmd, drag.currentEndMin);
+  } else if (drag.kind === "move-timed" && drag.convertTo === "allday" && drag.dropYmd) {
+    nextDate = toAllDayDate(drag.dropYmd);
+  } else if (drag.kind === "move-allday" && drag.convertTo === "timed" && drag.dropYmd) {
+    nextDate = toTimedDate(drag.dropYmd, drag.dropStartMin, DEFAULT_TIMED_DURATION_MIN);
   } else if (drag.kind === "move-timed") {
     if (drag.deltaDays === 0 && drag.deltaMin === 0) {
       render();
@@ -1772,7 +1928,7 @@ async function onPointerUp() {
     }
     nextDate = shiftTimedTaskDate(drag.task.date, drag.deltaDays, drag.deltaMin);
   } else if (drag.kind === "move-allday") {
-    if (drag.deltaDays === 0) {
+    if (!drag.deltaDays) {
       render();
       return;
     }
@@ -1808,6 +1964,7 @@ function onPointerCancel() {
   if (!activeDrag) return;
   cleanupDragListeners();
   hideDragTooltip();
+  clearDropTargets();
   render();
 }
 
@@ -2096,7 +2253,13 @@ $fAllDay.addEventListener("change", () => {
     $fEndTime.value = "10:00";
   }
   syncAllDayVisibility();
+  applyEndConstraints();
 });
+
+for (const el of [$fStartDate, $fStartTime, $fEndDate, $fEndTime]) {
+  el.addEventListener("change", applyEndConstraints);
+  el.addEventListener("input", applyEndConstraints);
+}
 
 $btnClearDate.addEventListener("click", () => {
   $fAllDay.checked = false;
@@ -2105,6 +2268,7 @@ $btnClearDate.addEventListener("click", () => {
   $fEndDate.value = "";
   $fEndTime.value = "";
   syncAllDayVisibility();
+  applyEndConstraints();
 });
 
 $btnArchive.addEventListener("click", () => {
@@ -2171,4 +2335,16 @@ if (
 }
 
 /* ===== 啟動 ===== */
+function applyUrlPrefs() {
+  const q = new URLSearchParams(location.search);
+  const range = q.get("range");
+  if (range && ["day", "week", "month"].includes(range)) {
+    state.range = range;
+  }
+  const view = q.get("view");
+  if (view && ["timeline", "list", "settings"].includes(view)) {
+    state.mainView = view;
+  }
+}
+applyUrlPrefs();
 loadData();

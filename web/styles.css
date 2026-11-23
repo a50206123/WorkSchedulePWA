@@ -565,6 +565,9 @@ button {
   gap: 6px;
   padding: 4px 10px;
   border-radius: var(--radius-sm);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   border: 1px solid var(--border);
   border-left: 3px solid var(--status-color, var(--accent));
   background: var(--surface);
@@ -592,12 +595,24 @@ button {
   color: var(--text-faint);
 }
 
+.calendar-vscroll,
 .time-scroll {
   max-height: calc(100dvh - 250px);
   min-height: 440px;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-gutter: stable;
   position: relative;
+}
+
+/* 表頭與整天列黏在同一垂直捲動容器頂端，與下方時間格共用捲軸寬度，避免欄線錯位 */
+.day-view .allday-strip,
+.week-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface-subtle);
+  box-shadow: 0 1px 0 var(--border);
 }
 
 .day-grid {
@@ -1059,7 +1074,19 @@ button {
   position: relative;
 }
 
+.is-drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.allday-chip.is-dragging,
+.allday-bar.is-dragging {
+  opacity: 0.55;
+}
+
 /* ===== 月視圖 ===== */
+
 .month-weekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -1933,6 +1960,7 @@ button {
     font-size: 16px;
   }
 
+  .calendar-vscroll,
   .time-scroll {
     max-height: calc(100dvh - 230px);
   }

@@ -13,6 +13,10 @@ import {
   resizeTimedTaskDate,
   shiftAllDayTaskDate,
   formatTaskDateSummary,
+  toTimedDate,
+  toAllDayDate,
+  clampEndDateTime,
+  validateEndNotBeforeStart,
 } from "./dates.js";
 
 const TODAY = "2026-11-23"; // Monday
@@ -95,4 +99,87 @@ test("日期摘要格式", () => {
   assert.equal(formatTaskDateSummary(null), "無日期");
   assert.match(formatTaskDateSummary(byId["demo-1"].date), /整天/);
   assert.match(formatTaskDateSummary(byId["demo-2"].date), /09:00/);
+});
+
+test("整天改為時段：15 分鐘對齊、預設 1 小時，跨午夜加一天", () => {
+  const d = toTimedDate("2026-11-23", 9 * 60 + 7);
+  assert.equal(d.hasTime, true);
+  assert.equal(d.start, "2026-11-23T09:00:00+08:00");
+  assert.equal(d.end, "2026-11-23T10:00:00+08:00");
+
+  const late = toTimedDate("2026-11-23", 23 * 60 + 30);
+  assert.equal(late.start, "2026-11-23T23:30:00+08:00");
+  assert.equal(late.end, "2026-11-24T00:30:00+08:00");
+});
+
+test("時段改為整天：單日 end 為 null", () => {
+  assert.deepEqual(toAllDayDate("2026-11-24"), { start: "2026-11-24", end: null, hasTime: false });
+});
+
+test("表單結束不得早於開始：自動調成等於開始，並在送出前驗證", () => {
+  const clamped = clampEndDateTime({
+    startDate: "2026-11-25",
+    startTime: "10:00",
+    endDate: "2026-11-23",
+    endTime: "08:00",
+    allDay: false,
+  });
+  assert.equal(clamped.endDate, "2026-11-25");
+  assert.equal(clamped.endTime, "10:00");
+  assert.equal(clamped.endDateMin, "2026-11-25");
+  assert.equal(clamped.endTimeMin, "10:00");
+  assert.equal(clamped.adjusted, true);
+
+  const allDay = clampEndDateTime({
+    startDate: "2026-11-25",
+    endDate: "2026-11-24",
+    allDay: true,
+  });
+  assert.equal(allDay.endDate, "2026-11-25");
+  assert.equal(allDay.adjusted, true);
+
+  const emptyEnd = clampEndDateTime({
+    startDate: "2026-11-25",
+    startTime: "10:00",
+    endDate: "",
+    endTime: "",
+    allDay: false,
+  });
+  assert.equal(emptyEnd.endDate, "");
+  assert.equal(emptyEnd.adjusted, false);
+
+  assert.equal(
+    validateEndNotBeforeStart({ startDate: "2026-11-25", endDate: "2026-11-24", allDay: true }),
+    "結束日期不可早於開始日期。"
+  );
+  assert.equal(
+    validateEndNotBeforeStart({
+      startDate: "2026-11-25",
+      startTime: "10:00",
+      endDate: "2026-11-25",
+      endTime: "09:00",
+      allDay: false,
+    }),
+    "結束時間不可早於開始時間。"
+  );
+  assert.equal(
+    validateEndNotBeforeStart({
+      startDate: "2026-11-25",
+      startTime: "10:00",
+      endDate: "2026-11-25",
+      endTime: "10:00",
+      allDay: false,
+    }),
+    "結束時間必須晚於開始時間。"
+  );
+  assert.equal(
+    validateEndNotBeforeStart({
+      startDate: "2026-11-25",
+      startTime: "10:00",
+      endDate: "2026-11-25",
+      endTime: "11:00",
+      allDay: false,
+    }),
+    null
+  );
 });
